@@ -1,0 +1,43 @@
+#!/usr/bin/env python 
+
+"""Service implementation for NLImageService."""
+
+from concurrent import futures
+from PIL import Image
+
+import argparse
+import grpc
+import image_pb2
+import image_pb2_grpc
+import lib
+import logging
+
+
+parser = argparse.ArgumentParser(description="NL image service client")
+parser.add_argument("--host", type=str, required=True, help="Host address")
+parser.add_argument("--port", type=int, required=True, help="Port number")
+
+
+class ImageServiceHandler(image_pb2_grpc.NLImageServiceServicer):
+
+    def MeanFilter(self, request, context):
+        return lib.mean_filter(request)
+
+    def RotateImage(self, request, context):
+        return lib.rotate(request.image, request.rotation)
+
+
+def serve(host, port):
+    server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
+    image_pb2_grpc.add_NLImageServiceServicer_to_server(ImageServiceHandler(), server)
+    address = "%s:%d" % (host, port)
+    server.add_insecure_port(address)
+    server.start()
+    server.wait_for_termination()
+
+
+if __name__ == '__main__':
+    logging.basicConfig()
+
+    args = parser.parse_args()
+    serve(args.host, args.port)

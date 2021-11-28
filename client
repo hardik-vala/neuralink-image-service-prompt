@@ -1,0 +1,85 @@
+#!/usr/bin/env python
+
+"""Client for the NLImageService."""
+
+from __future__ import print_function
+from PIL import Image
+
+import argparse
+import grpc
+import image_pb2
+import image_pb2_grpc
+import lib
+import logging
+
+
+parser = argparse.ArgumentParser(description="NL image service client")
+parser.add_argument("--host", type=str, required=True, help="Host name")
+parser.add_argument("--port", type=int, required=True, help="Port number")
+parser.add_argument("--input", type=str, required=True,
+    help="Location of a jpeg or png")
+parser.add_argument("--output", type=str, required=True,
+    help="Path of the output image")
+parser.add_argument("--mean_filter", dest="mean_filter", action="store_true",
+    help="Specifies that the mean filter should be run on the input image")
+parser.add_argument("--rotate", type=str,
+    help="Specifies that the input image be rotated by some multiple of 90 deg")
+
+
+def run():
+    args = parser.parse_args()
+
+    if not args.mean_filter and not args.rotate:
+        raise ValueError("Must run either mean filter or rotate")
+
+    logging.info("Reading input image from %s..." % args.input)
+    input_image = Image.open(args.input)
+
+    logging.debug("Converting input image to NLImage...")
+    nl_image = lib.convert_to_nl_image(input_image)
+
+    server_address = "%s:%d" % (args.host, args.port)
+    logging.debug("Opening channel to %s..." % server_address)
+    with grpc.insecure_channel(server_address) as channel:
+        stub = image_pb2_grpc.NLImageServiceStub(channel)
+        if args.mean_filter:
+            logging.debug("Applying mean filter...")
+            nl_image = stub.MeanFilter(nl_image)
+        
+        if args.rotate:
+            logging.debug("Applying %s rotation..." % args.rotate)
+            request = image_pb2.NLImageRotateRequest(image=nl_image,
+                rotation=_get_rotation(args.rotate))
+            nl_image = stub.RotateImage(request)
+        
+        logging.debug("Converting output NLImage...")
+        output_image = lib.convert_to_image(nl_image)
+
+        logging.info("Writing output image to %s..." % args.output)
+        output_image.save(args.output, _get_output_file_fmt(args.output))
+
+
+def _get_rotation(rotation_str):
+    rotation_str = rotation_str.lower()
+    if rotation_str == "none":
+        return image_pb2.NLImageRotateRequest.Rotation.NONE
+    elif rotation_str == "ninety_deg":
+        return image_pb2.NLImageRotateRequest.Rotation.NINETY_DEG
+    elif rotation_str == "one_eighty_deg":
+        return image_pb2.NLImageRotateRequest.Rotation.ONE_EIGHTY_DEG
+    elif rotation_str == "two_seventy_deg":
+        return image_pb2.NLImageRotateRequest.Rotation.TWO_SEVENTY_DEG
+    else:
+        ValueError("Unrecognized rotation '%s'" % rotation_str)
+
+
+def _get_output_file_fmt(output_path):
+    ext = output_path[-3:].lower()
+    if ext == "jpg":
+        return "jpeg"
+    return ext
+
+
+if __name__ == "__main__":
+    logging.basicConfig()
+    run()

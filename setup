@@ -1,0 +1,7 @@
+#!/bin/bash
+
+apt-get update && apt-get install -y \
+	python \
+	python-pip
+pip install grpcio grpcio-tools pillow
+pip install protobuf==3.17.3
