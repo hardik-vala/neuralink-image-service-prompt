@@ -1,6 +1,8 @@
 gRPC Image Rotation Service: SOLUTION
 =====================================
 
+See `prompt.md` for context.
+
 Requirements
 ------------
 
